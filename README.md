@@ -1,6 +1,8 @@
 # cs231n-assignments
 My solutions to CS231n course assignments (Convolutional Neural Networks for Visual Recognition)
 
+Spring 2018
+
 Course site:
 http://cs231n.github.io/
 
