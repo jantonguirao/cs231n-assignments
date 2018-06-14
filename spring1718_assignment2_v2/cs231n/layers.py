@@ -406,7 +406,41 @@ def layernorm_forward(x, gamma, beta, ln_param):
     # transformations you could perform, that would enable you to copy over   #
     # the batch norm code and leave it almost unchanged?                      #
     ###########################################################################
-    pass
+
+    # Step 1
+    xT = x.T
+    mu = np.mean( xT, axis=0 )
+    # Step 2
+    xmu = xT - mu
+    # Step 3
+    xmu_sq = xmu ** 2
+    # Step 4
+    var = np.mean( xmu_sq, axis=0 )
+    # Step 5
+    stddev = np.sqrt( var + eps )
+    # Step 6
+    istddev = 1 / stddev
+    # Step 7
+    xhat = (xmu * istddev).T
+    # Step 8
+    gammax = gamma * xhat
+    # Step 9
+    out = gammax + beta
+    # Cache
+    cache = {
+        "beta": beta,
+        "gamma": gamma,
+        "mu" : mu,
+        "xmu" : xmu,
+        "xmu_sq" : xmu_sq,
+        "var" : var,
+        "stddev" : stddev,
+        "istddev" : istddev,
+        "xhat" : xhat,
+        "gammax" : gammax,
+        "out" : out
+    }
+
     ###########################################################################
     #                             END OF YOUR CODE                            #
     ###########################################################################
@@ -437,11 +471,58 @@ def layernorm_backward(dout, cache):
     # implementation of batch normalization. The hints to the forward pass    #
     # still apply!                                                            #
     ###########################################################################
-    pass
+    N,D = dout.shape
+
+    beta = cache["beta"]
+    gamma = cache["gamma"]
+    mu = cache["mu"]
+    xmu = cache["xmu"]
+    xmu_sq = cache["xmu_sq"]
+    var = cache["var"]
+    stddev = cache["stddev"]
+    istddev = cache["istddev"]
+    xhat = cache["xhat"]
+    gammax = cache["gammax"]
+    out = cache["out"]
+
+    # Step 9 (out = gammax + beta)
+    dgammax = dout
+    dbeta = np.sum(dout, axis=0)
+
+    # Step 8 (gammax = gamma * xhat)
+    dgamma = np.sum( dgammax * xhat, axis=0 )
+    dxhat = dgammax * gamma
+
+    # Step 7 (xhat = xmu * istddev)
+    dxmu1 = dxhat.T * istddev
+    distddev = np.sum(dxhat.T * xmu, axis=0)
+
+    # Step 6 (istddev = 1 / stddev)
+    dstddev =  -1*distddev / stddev**2
+
+    # Step 5 (stddev = np.sqrt( var + eps ))
+    dvar = 0.5 * dstddev / stddev
+
+    # Step 4 (var = (1/D) * np.sum( xmu_sq, axis=0 ))
+    dxmu_sq = (1/D) * np.ones((D,N)) * dvar
+
+    # Step 3 (xmu_sq s= xmu ** 2)
+    dxmu2 = 2*xmu*dxmu_sq
+
+    # Step 2 (xmu = x - mu)
+    dx1 = (dxmu1+dxmu2)
+    dmu = -np.sum(dxmu1+dxmu2, axis=0)
+
+    # Step 1 (mu = (1/D) * np.sum( xT, axis=0 ))
+    dx2 = (1/D) * np.ones((D,N)) * dmu
+
+    # Step 0
+    dx = dx1+dx2
+
     ###########################################################################
     #                             END OF YOUR CODE                            #
     ###########################################################################
-    return dx, dgamma, dbeta
+    return dx.T, dgamma, dbeta
 
 
 def dropout_forward(x, dropout_param):
