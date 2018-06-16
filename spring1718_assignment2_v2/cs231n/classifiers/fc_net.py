@@ -265,24 +265,25 @@ class FullyConnectedNet(object):
         prev_cache = None
         layer_data = []
         for l in range( self.num_layers ):
-            layer_cache = []
+            layer_cache = {'affine': None, 'batchnorm': None, 'dropout': None, 'relu': None}
             w, b = [ self.params[ base_name+str(l+1) ] for base_name in ["W", "b"] ]
             prev_out, affine_cache = affine_forward(prev_out, w, b)
-            layer_cache.append( affine_cache )
+            layer_cache["affine"] = affine_cache
 
             if l < (self.num_layers-1):
                 if self.normalization == 'batchnorm':
                     gamma, beta = [ self.params[ base_name+str(l+1) ] for base_name in ["gamma", "beta"] ]
                     prev_out, bn_cache = batchnorm_forward(prev_out, gamma, beta, self.bn_params[l])
-                    layer_cache.append( bn_cache )
-
+                    layer_cache['batchnorm'] = bn_params
+                if self.use_dropout:
+                    prev_out, dropout_cache = dropout_forward( prev_out, self.dropout_param )
+                    layer_cache['dropout'] = dropout_cache
                 prev_out, relu_cache = relu_forward(prev_out)
-                layer_cache.append(relu_cache)
+                layer_cache['relu'] = relu_cache
 
-            layer_data.append( (prev_out, tuple(layer_cache) ) )
+            layer_data.append( (prev_out, layer_cache ) )
         scores = prev_out
 
-        #TODO dropout
         ############################################################################
         #                             END OF YOUR CODE                             #
         ############################################################################
@@ -313,19 +314,21 @@ class FullyConnectedNet(object):
         for l in reversed( range( self.num_layers ) ):
             layer_out, layer_cache = layer_data[l]
 
-            affine_cache, batchnorm_cache, relu_cache = None, None, None
-            if len(layer_cache) >= 2:
-                relu_cache = layer_cache[-1]
+            affine_cache = layer_cache['affine']
+            batchnorm_cache = layer_cache['batchnorm']
+            dropout_cache = layer_cache['dropout']
+            relu_cache = layer_cache['relu']
+
+            if relu_cache is not None:
                 prev_dx = relu_backward(prev_dx, relu_cache)
-            if len(layer_cache) == 3:
-                batchnorm_cache = layer_cache[1]
+            if dropout_cache is not None:
+                prev_dx = dropout_backward(prev_dx, dropout_cache)
+            if batchnorm_cache is not None:
                 prev_dx, dgamma, dbeta = batchnorm_backward_alt(prev_dx, batchnorm_cache)
                 grads['gamma'+str(l+1)], grads['beta'+str(l+1)] = dgamma, dbeta
 
-            affine_cache = layer_cache[0]
             prev_dx, dw, db = affine_backward(prev_dx, affine_cache)
             grads['W'+str(l+1)], grads['b'+str(l+1)] = dw, db
-
             grads['W'+str(l+1)] += self.reg * self.params['W'+str(l+1)] # L2 regularization term
 
         ############################################################################
